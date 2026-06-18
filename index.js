@@ -8,7 +8,7 @@ const IMAGE_SIZE = '1024x768';
 const CHAT_MESSAGE_COUNT = 10;
 const AI_PROMPT_RESPONSE_LENGTH = 420;
 const TEXT_AI_TIMEOUT_MS = 45000;
-const MAX_REFERENCE_IMAGES = 2;
+const MAX_REFERENCE_IMAGES = 1;
 
 const DEFAULT_SETTINGS = {
     apiKey: '',
@@ -480,7 +480,8 @@ function buildImagePromptInstruction(mode) {
         'Output only the final image prompt in English. No markdown. No explanations.',
         'Make the prompt complete enough for image generation without seeing the original chat.',
         'Current scene visual priority overrides default wardrobe from the character card.',
-        'If reference image URLs are listed, preserve their subject identity, hair color, clothing mood, lighting, camera angle, and composition while making a clean new image.',
+        'If reference image URLs are listed, use the first reference image as the primary visual reference and preserve its subject identity, hair color, clothing mood, lighting, camera angle, crop, and composition while making a clean new image.',
+        'For current CG-style chat cards, stay close to the displayed CG framing; close-up reference images should remain close-up rather than becoming full-body shots.',
         'Match outfit to the current scene: home, dusk, doorway, warm interior light, return-home, and waiting scenes should use elegant evening/home attire from the card instead of office attire.',
         'Use office attire only when the current chat clearly places the character in work, office, or magazine scenes.',
         'When a character card contains role, occupation, hair, face, outfit, personality, or relationship details, keep those visual identity details unless they are private action details.',
