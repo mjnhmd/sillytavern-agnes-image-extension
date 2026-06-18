@@ -3,10 +3,10 @@
   "loading_order": 100,
   "requires": [],
   "optional": [],
-  "js": "index.js?v=0.2.8",
+  "js": "index.js?v=0.2.9",
   "css": "style.css",
   "author": "package_sender",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "homePage": "https://github.com/mjnhmd/sillytavern-agnes-image-extension",
   "auto_update": true,
   "minimum_client_version": "1.12.13"
