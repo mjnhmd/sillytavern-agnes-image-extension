@@ -102,6 +102,13 @@ function getMessageText(message) {
     ].filter(Boolean).join(' ');
 }
 
+function getActiveCharacter() {
+    const context = getContext();
+    const characterId = Number(context.characterId);
+    if (!Number.isInteger(characterId)) return null;
+    return context.characters?.[characterId] || null;
+}
+
 function getRecentChatText() {
     const chat = Array.isArray(getContext().chat) ? getContext().chat : [];
     return chat
@@ -114,13 +121,13 @@ function getRecentChatText() {
 function getPromptSourceText() {
     return [
         'CURRENT CHARACTER CARD:',
-        getActiveCharacterText() || '(none)',
+        sanitizeForImagePrompt(getActiveCharacterText()) || '(none)',
         '',
         'RELATED CHARACTER CARDS:',
-        getRelatedCharactersText() || '(none)',
+        sanitizeForImagePrompt(getRelatedCharactersText()) || '(none)',
         '',
         'RECENT CHAT:',
-        getRecentChatText() || '(none)',
+        sanitizeForImagePrompt(getRecentChatText()) || '(none)',
         '',
         'CURRENT VISUAL PRESET:',
         getPresetVisualHints() || '(none)',
@@ -128,11 +135,7 @@ function getPromptSourceText() {
 }
 
 function getActiveCharacterText() {
-    const context = getContext();
-    const character = Number.isInteger(context.characterId)
-        ? context.characters?.[context.characterId]
-        : null;
-
+    const character = getActiveCharacter();
     if (!character) return '';
 
     return [
@@ -158,9 +161,7 @@ function normalizePersonName(value) {
 function getCandidateNames(rawText) {
     const context = getContext();
     const names = new Set();
-    const activeCharacter = Number.isInteger(context.characterId)
-        ? context.characters?.[context.characterId]
-        : null;
+    const activeCharacter = getActiveCharacter();
 
     [
         activeCharacter?.name,
@@ -190,9 +191,7 @@ function findCharacterByName(name) {
 
 function getRelatedCharactersText() {
     const rawText = `${getActiveCharacterText()}\n${getRecentChatText()}`;
-    const activeCharacter = Number.isInteger(getContext().characterId)
-        ? getContext().characters?.[getContext().characterId]
-        : null;
+    const activeCharacter = getActiveCharacter();
 
     return getCandidateNames(rawText)
         .map(findCharacterByName)
@@ -304,7 +303,7 @@ function getPresetVisualHints() {
         sdPrefix ? `Image positive style preset: ${sdPrefix}` : '',
         sdCharacter ? `Character image preset: ${sdCharacter}` : '',
         hasJailbreakPreset
-            ? 'The Tavern preset suggests strong fictional drama; use only that general mood, not any restricted wording.'
+            ? 'The current preset suggests strong fictional drama; use only that general mood.'
             : '',
     ].filter(Boolean).join('\n');
 }
@@ -418,12 +417,12 @@ function buildImagePromptInstruction(mode) {
         focus,
         'Output only the final image prompt in English. No markdown. No explanations.',
         'Make the prompt complete enough for image generation without seeing the original chat.',
-        'When a character card contains role, occupation, hair, face, outfit, personality, or relationship details, keep those visual identity details unless they are explicit.',
+        'When a character card contains role, occupation, hair, face, outfit, personality, or relationship details, keep those visual identity details unless they are private action details.',
         'For character portraits, prioritize the currently active character card over the latest speaker if they differ.',
-        'The prompt must be suitable for a public image model: describe only fully dressed fictional adults, non-explicit body language, environment, lighting, composition, and visual style.',
-        'If the source contains explicit, erotic, violent, incest, or other restricted actions, convert them into neutral visual mood such as dramatic tension, emotional intensity, awkward silence, conflict, concern, longing, or suspense.',
-        'Keep concrete identity and appearance details. Remove explicit acts, anatomy, sexual status words, dice/check mechanics, JSON patches, and meta instructions.',
-        'Use positive visual wording only. Do not include negative safety instructions.',
+        'The prompt must be suitable for a public image model: describe only fully dressed fictional adults, neutral body language, environment, lighting, composition, and visual style.',
+        'If the source contains private actions or sensitive relationship context, convert them into neutral visual mood such as dramatic tension, emotional intensity, awkward silence, conflict, concern, longing, or suspense.',
+        'Keep concrete identity and appearance details. Remove private actions, anatomy details, game mechanics, JSON patches, and meta instructions.',
+        'Use positive visual wording only. Do not include refusal or warning instructions.',
         '',
         getPromptSourceText(),
     ].join('\n');
