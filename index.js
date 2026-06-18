@@ -450,6 +450,8 @@ function buildPrompt(mode) {
 function finalCleanImagePrompt(value) {
     return sanitizeForImagePrompt(value)
         .replace(/(?:must not|do not|avoid|forbidden|restricted|policy|safety|安全|禁止|不能|不要)/gi, ' ')
+        .replace(/\b(?:bare back|bare waist|waistline|pushed up|expose(?:d|s)?|sweat(?:y)?|intimate|seductive|sensual|surrender|bed|bedroom)\b/gi, ' ')
+        .replace(/露出|裸背|腰线|掀起|汗水|亲密|诱惑|性感|臣服|床/g, ' ')
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
@@ -634,6 +636,17 @@ function showResult(imageUrl, prompt) {
     setPanelOpen(true);
 }
 
+function clearPreviousResult() {
+    lastImageUrl = '';
+    const result = document.querySelector('#agnes_image_result');
+    const preview = document.querySelector('#agnes_image_preview');
+    const link = document.querySelector('#agnes_image_open');
+
+    if (preview) preview.removeAttribute('src');
+    if (link) link.href = '#';
+    result?.classList.remove('is-visible');
+}
+
 async function generateImage(mode) {
     currentMode = mode;
 
@@ -645,6 +658,7 @@ async function generateImage(mode) {
 
     try {
         setPanelOpen(true);
+        clearPreviousResult();
         setStatus(mode === 'character' ? '正在生成角色图...' : '正在生成场景图...');
         const referenceImages = getReferenceImages();
         const prompt = applyReferenceCompositionGuidance(await buildPromptWithAgnesTextAI(mode), referenceImages);
