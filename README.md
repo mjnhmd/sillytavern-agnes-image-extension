@@ -23,11 +23,14 @@ Restart SillyTavern or reload the page, then open `Extensions` and find `Agnes I
 
 1. Open `Extensions`.
 2. Enter your Agnes API key.
-3. Choose `场景图` or `角色图`.
-4. Click `从当前聊天生成`.
-5. Preview or download the returned image.
+3. Return to the chat page.
+4. Click the floating image button.
+5. Choose `生成场景图` or `生成角色图`.
+6. Preview, open, or copy the returned image URL.
 
 The extension uses the latest chat messages through `SillyTavern.getContext()`. It does not export chat files or send anything until you click the generate button.
+
+The extension also reads current Tavern preset fields, including writing prompt, system prompt, and Stable Diffusion prompt fields, as visual and story-fidelity hints. Safety-bypass or jailbreak wording is not copied into the Agnes request.
 
 ## Agnes API
 
@@ -39,7 +42,7 @@ The browser CORS check passed against the current Agnes gateway on 2026-06-18: i
 
 ## Safety Defaults
 
-Generated prompts force a non-explicit visual target: clothed subjects, no nudity, no sexual act, and no graphic content. This is intentional because roleplay chat can contain private or adult text, while image generation should stay usable and reviewable.
+Generated prompts force a non-explicit visual target: no nudity, no sexual act, and no graphic content. This is intentional because roleplay chat can contain private or adult text, while image generation should stay usable and reviewable.
 
 ## Troubleshooting
 
