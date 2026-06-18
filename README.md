@@ -1,6 +1,6 @@
 # Agnes Image for SillyTavern
 
-SillyTavern third-party extension that reads the current chat context and uses Agnes Image to generate either a scene image or a character image.
+SillyTavern third-party extension that reads the current chat context, uses Agnes-2.0-Flash to turn it into a complete safe image prompt, then uses Agnes Image to generate either a scene image or a character image.
 
 ## Install
 
@@ -30,12 +30,15 @@ Restart SillyTavern or reload the page, then open `Extensions` and find `Agnes I
 
 The extension uses the latest chat messages through `SillyTavern.getContext()`. It does not export chat files or send anything until you click the generate button.
 
-The extension also reads current Tavern preset fields, including writing prompt, system prompt, and Stable Diffusion prompt fields, as visual and story-fidelity hints. Safety-bypass or jailbreak wording is not copied into the Agnes request.
+The extension also reads the active character card, related character cards found in recent chat, and current Tavern visual preset fields as story-fidelity hints. Safety-bypass or jailbreak wording is not copied into the Agnes request.
+
+Prompt generation is handled by Agnes-2.0-Flash, not the Tavern main AI. If Agnes text generation fails, the extension falls back to a local safe prompt builder so the UI still degrades gracefully.
 
 ## Agnes API
 
 - Endpoint: `https://apihub.agnes-ai.com/v1/images/generations`
-- Model: `agnes-image-2.1-flash`
+- Image model: `agnes-image-2.1-flash`
+- Text prompt model: `agnes-2.0-flash`
 - Auth: `Authorization: Bearer <API key>`
 
 The browser CORS check passed against the current Agnes gateway on 2026-06-18: invalid-token POST returned a readable `401` JSON response instead of a browser CORS block.
