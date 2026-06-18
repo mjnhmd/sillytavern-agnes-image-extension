@@ -8,6 +8,7 @@ const IMAGE_SIZE = '1024x768';
 const CHAT_MESSAGE_COUNT = 10;
 const AI_PROMPT_RESPONSE_LENGTH = 420;
 const TEXT_AI_TIMEOUT_MS = 45000;
+const MAX_REFERENCE_IMAGES = 2;
 
 const DEFAULT_SETTINGS = {
     apiKey: '',
@@ -82,9 +83,13 @@ function getFieldValue(id) {
 function removeUnsafeBypassText(value) {
     return String(value ?? '')
         .replace(/(?:jailbreak|破限|越狱|绕过|无视规则|解除限制|bypass|ignore policy|ignore safety)/gi, ' ')
+        .replace(/真丝吊带贴身睡裙/g, 'burgundy satin evening dress with a robe')
+        .replace(/吊带贴身睡裙/g, 'satin evening dress with a robe')
+        .replace(/真丝睡裙/g, 'satin evening dress')
+        .replace(/睡裙/g, 'evening dress')
         .replace(/[A-H]\s*罩杯/gi, ' ')
         .replace(/\b[A-H]\s*cup\b/gi, ' ')
-        .replace(/(?:阴茎|龟头|阴道|阴唇|乳头|裸体|裸露|赤裸|性交|交合|做爱|口交|肛交|高潮|射精|精液|跳蛋|性器|色情|性爱|性斗|骰值|体质|经验|罩杯|胸部|乳房|睡裙|贴身)/g, ' ')
+        .replace(/(?:阴茎|龟头|阴道|阴唇|乳头|裸体|裸露|赤裸|性交|交合|做爱|口交|肛交|高潮|射精|精液|跳蛋|性器|色情|性爱|性斗|骰值|体质|经验|罩杯|胸部|乳房|贴身)/g, ' ')
         .replace(/\b(?:penis|vagina|vulva|nipple|nude|naked|sex|sexual|intercourse|oral sex|anal sex|orgasm|semen|porn)\b/gi, ' ');
 }
 
@@ -120,8 +125,59 @@ function getRecentChatText() {
         .join('\n');
 }
 
+function getCurrentSceneVisualText() {
+    const raw = getRecentChatText();
+    const cgBlocks = [...String(raw).matchAll(/<opening_cg>([\s\S]*?)<\/opening_cg>/gi)]
+        .map(match => match[1])
+        .join('\n');
+    const source = cgBlocks || raw;
+    const visualLines = [...source.matchAll(/\[(?:Title|Line\d+)\|([^\]]+)\]/gi)]
+        .map(match => match[1])
+        .filter(Boolean);
+    const plainTail = source
+        .replace(/<dialog>[\s\S]*?<\/dialog>/gi, ' ')
+        .replace(/\[[^\]]+\]/g, ' ')
+        .replace(/<\/?opening_cg>/gi, ' ');
+
+    return sanitizeForImagePrompt([...visualLines, plainTail].join('\n')).slice(0, 1400);
+}
+
+function getReferenceImages() {
+    const references = [];
+    const addUrl = (url, label = '') => {
+        if (!url || references.some(item => item.url === url)) return;
+        if (!/^https?:\/\//i.test(url)) return;
+        references.push({ url, label });
+    };
+
+    document.querySelectorAll('iframe').forEach((iframe) => {
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+        doc.querySelectorAll('img').forEach((img) => {
+            const rect = img.getBoundingClientRect();
+            const url = img.currentSrc || img.src;
+            const label = [img.alt, img.className].filter(Boolean).join(' ');
+            const isCgImage = /cg|cover|scene|封面|场景/i.test(label);
+            if ((isCgImage || rect.width >= 180 || rect.height >= 180) && url) {
+                addUrl(url, label);
+            }
+        });
+    });
+
+    return references.slice(0, MAX_REFERENCE_IMAGES);
+}
+
 function getPromptSourceText() {
+    const referenceImages = getReferenceImages();
     return [
+        'CURRENT SCENE VISUAL PRIORITY:',
+        getCurrentSceneVisualText() || '(none)',
+        '',
+        'CURRENT REFERENCE IMAGES:',
+        referenceImages.length > 0
+            ? referenceImages.map((item, index) => `${index + 1}. ${item.label || 'reference image'}: ${item.url}`).join('\n')
+            : '(none)',
+        '',
         'CURRENT CHARACTER CARD:',
         sanitizeForImagePrompt(getActiveCharacterText()) || '(none)',
         '',
@@ -224,6 +280,8 @@ function translateVisualTerms(value) {
         .replace(/红色唇膏/g, 'red lipstick')
         .replace(/西装套装/g, 'business suit')
         .replace(/真丝衬衫/g, 'silk blouse')
+        .replace(/burgundy satin evening dress with a robe/g, 'burgundy satin evening dress with a robe')
+        .replace(/satin evening dress/g, 'satin evening dress')
         .replace(/高跟鞋/g, 'high heels')
         .replace(/连衣裙/g, 'dress')
         .replace(/白色帆布鞋/g, 'white canvas shoes')
@@ -320,7 +378,9 @@ function extractSceneBrief(chatText, characterText) {
     const sceneMatch = clean.match(/scene[:：]\s*([^<\n。]{1,80})/i);
     const timeMatch = clean.match(/time[:：]\s*([^<\n。]{1,80})/i);
     const placeMatch = clean.match(/(?:当前地点|当前位置|location)[:：\"\\/\s]+([^,\"，。<\n]{1,40})/i);
+    const currentVisual = getCurrentSceneVisualText();
     const briefParts = [
+        currentVisual ? `current scene: ${currentVisual}` : '',
         sceneMatch ? `setting: ${sceneMatch[1]}` : '',
         placeMatch ? `place: ${placeMatch[1]}` : '',
         timeMatch ? `time: ${timeMatch[1]}` : '',
@@ -419,6 +479,10 @@ function buildImagePromptInstruction(mode) {
         focus,
         'Output only the final image prompt in English. No markdown. No explanations.',
         'Make the prompt complete enough for image generation without seeing the original chat.',
+        'Current scene visual priority overrides default wardrobe from the character card.',
+        'If reference image URLs are listed, preserve their subject identity, hair color, clothing mood, lighting, camera angle, and composition while making a clean new image.',
+        'Match outfit to the current scene: home, dusk, doorway, warm interior light, return-home, and waiting scenes should use elegant evening/home attire from the card instead of office attire.',
+        'Use office attire only when the current chat clearly places the character in work, office, or magazine scenes.',
         'When a character card contains role, occupation, hair, face, outfit, personality, or relationship details, keep those visual identity details unless they are private action details.',
         'For character portraits, prioritize the currently active character card over the latest speaker if they differ.',
         'The prompt must be suitable for a public image model: describe only fully dressed fictional adults, neutral body language, environment, lighting, composition, and visual style.',
@@ -498,7 +562,15 @@ function extractImageUrl(response) {
     return response?.url || response?.image_url || '';
 }
 
-async function callAgnesImageApi(prompt) {
+async function callAgnesImageApi(prompt, referenceImages = []) {
+    const extraBody = {
+        response_format: 'url',
+    };
+
+    if (referenceImages.length > 0) {
+        extraBody.image = referenceImages.map(item => item.url);
+    }
+
     const response = await fetch(AGNES_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -509,9 +581,7 @@ async function callAgnesImageApi(prompt) {
             model: AGNES_IMAGE_MODEL,
             prompt,
             size: IMAGE_SIZE,
-            extra_body: {
-                response_format: 'url',
-            },
+            extra_body: extraBody,
         }),
     });
 
@@ -561,11 +631,12 @@ async function generateImage(mode) {
     try {
         setPanelOpen(true);
         setStatus(mode === 'character' ? '正在生成角色图...' : '正在生成场景图...');
+        const referenceImages = getReferenceImages();
         const prompt = await buildPromptWithAgnesTextAI(mode);
         const promptBox = document.querySelector('#agnes_image_prompt');
         if (promptBox) promptBox.value = prompt;
 
-        const response = await callAgnesImageApi(prompt);
+        const response = await callAgnesImageApi(prompt, referenceImages);
         const imageUrl = extractImageUrl(response);
 
         if (!imageUrl) {
