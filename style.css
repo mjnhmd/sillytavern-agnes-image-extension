@@ -17,22 +17,22 @@
     gap: 8px;
 }
 
-.agnes-image-extension .agnes-status {
+.agnes-status {
     min-height: 20px;
     opacity: 0.9;
 }
 
-.agnes-image-extension .agnes-result {
+.agnes-result {
     display: none;
     gap: 8px;
     flex-direction: column;
 }
 
-.agnes-image-extension .agnes-result.is-visible {
+.agnes-result.is-visible {
     display: flex;
 }
 
-.agnes-image-extension .agnes-preview {
+.agnes-preview {
     max-width: 100%;
     max-height: 420px;
     object-fit: contain;
@@ -41,15 +41,99 @@
     background: var(--black30a);
 }
 
-.agnes-image-extension .agnes-prompt {
+.agnes-prompt {
     width: 100%;
     min-height: 120px;
     resize: vertical;
     font-family: var(--monoFontFamily);
 }
 
+.agnes-image-fab {
+    position: fixed;
+    right: 18px;
+    bottom: 84px;
+    z-index: 30000;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 999px;
+    color: var(--SmartThemeBodyColor);
+    background: var(--SmartThemeBlurTintColor);
+    box-shadow: 0 8px 20px var(--black50a);
+    cursor: pointer;
+}
+
+.agnes-image-fab:hover {
+    filter: brightness(1.1);
+}
+
+.agnes-image-floating-panel {
+    position: fixed;
+    right: 18px;
+    bottom: 142px;
+    z-index: 30000;
+    width: min(420px, calc(100vw - 24px));
+    max-height: min(680px, calc(100vh - 180px));
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    overflow: auto;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    color: var(--SmartThemeBodyColor);
+    background: var(--SmartThemeBlurTintColor);
+    box-shadow: 0 12px 32px var(--black70a);
+    backdrop-filter: blur(12px);
+}
+
+.agnes-image-floating-panel.is-open {
+    display: flex;
+}
+
+.agnes-floating-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.agnes-floating-header .menu_button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+}
+
+.agnes-image-floating-panel .agnes-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.agnes-image-floating-panel .agnes-actions .menu_button {
+    width: auto;
+    min-width: 96px;
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+}
+
 @media (max-width: 600px) {
     .agnes-image-extension .agnes-row {
         grid-template-columns: 1fr;
+    }
+
+    .agnes-image-fab {
+        right: 12px;
+        bottom: 76px;
+    }
+
+    .agnes-image-floating-panel {
+        right: 12px;
+        bottom: 132px;
+        max-height: min(580px, calc(100vh - 160px));
     }
 }
