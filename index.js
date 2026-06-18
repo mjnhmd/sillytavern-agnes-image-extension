@@ -1,9 +1,13 @@
 const EXTENSION_NAME = 'sillytavern-agnes-image-extension';
 const EXTENSION_TITLE = 'Agnes Image';
 const AGNES_IMAGE_ENDPOINT = 'https://apihub.agnes-ai.com/v1/images/generations';
+const AGNES_TEXT_ENDPOINT = 'https://apihub.agnes-ai.com/v1/chat/completions';
 const AGNES_IMAGE_MODEL = 'agnes-image-2.1-flash';
+const AGNES_TEXT_MODEL = 'agnes-2.0-flash';
 const IMAGE_SIZE = '1024x768';
 const CHAT_MESSAGE_COUNT = 10;
+const AI_PROMPT_RESPONSE_LENGTH = 420;
+const TEXT_AI_TIMEOUT_MS = 45000;
 
 const DEFAULT_SETTINGS = {
     apiKey: '',
@@ -31,7 +35,7 @@ function loadSettings() {
         apiKey: store.apiKey || '',
     };
 
-    // Keep only the secret in persistent extension settings.
+    // Keep only the API key in persistent extension settings.
     Object.keys(store).forEach((key) => {
         if (key !== 'apiKey') delete store[key];
     });
@@ -107,6 +111,22 @@ function getRecentChatText() {
         .join('\n');
 }
 
+function getPromptSourceText() {
+    return [
+        'CURRENT CHARACTER CARD:',
+        getActiveCharacterText() || '(none)',
+        '',
+        'RELATED CHARACTER CARDS:',
+        getRelatedCharactersText() || '(none)',
+        '',
+        'RECENT CHAT:',
+        getRecentChatText() || '(none)',
+        '',
+        'CURRENT VISUAL PRESET:',
+        getPresetVisualHints() || '(none)',
+    ].join('\n').slice(0, 9000);
+}
+
 function getActiveCharacterText() {
     const context = getContext();
     const character = Number.isInteger(context.characterId)
@@ -166,6 +186,26 @@ function findCharacterByName(name) {
     const characters = Array.isArray(getContext().characters) ? getContext().characters : [];
     return characters.find(character => character?.name === name)
         || characters.find(character => String(character?.name || '').includes(name) || name.includes(String(character?.name || '')));
+}
+
+function getRelatedCharactersText() {
+    const rawText = `${getActiveCharacterText()}\n${getRecentChatText()}`;
+    const activeCharacter = Number.isInteger(getContext().characterId)
+        ? getContext().characters?.[getContext().characterId]
+        : null;
+
+    return getCandidateNames(rawText)
+        .map(findCharacterByName)
+        .filter(character => character && character !== activeCharacter)
+        .map(character => [
+            `Name: ${character.name || ''}`,
+            `Description: ${character.description || character.desc || ''}`,
+            `Personality: ${character.personality || ''}`,
+            `Scenario: ${character.scenario || ''}`,
+            `Creator notes: ${character.creator_notes || ''}`,
+        ].filter(Boolean).join('\n'))
+        .join('\n\n')
+        .slice(0, 3000);
 }
 
 function translateVisualTerms(value) {
@@ -346,6 +386,105 @@ function buildPrompt(mode) {
         : buildScenePrompt(visualBrief, characterBrief, presetHints);
 }
 
+function finalCleanImagePrompt(value) {
+    return sanitizeForImagePrompt(value)
+        .replace(/(?:must not|do not|avoid|forbidden|restricted|policy|safety|安全|禁止|不能|不要)/gi, ' ')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 1200);
+}
+
+function withTimeout(promise, timeoutMs, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            window.setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+        }),
+    ]);
+}
+
+function buildImagePromptInstruction(mode) {
+    const task = mode === 'character'
+        ? 'Create one English text-to-image prompt for a character portrait.'
+        : 'Create one English text-to-image prompt for a story scene illustration.';
+
+    const focus = mode === 'character'
+        ? 'Preserve the main character name, age if known, gender, role, hair, face, outfit, personality, and story mood. Use a simple matching background.'
+        : 'Preserve the named characters if known, setting, time, atmosphere, outfits, body language, props, and story mood.';
+
+    return [
+        task,
+        focus,
+        'Output only the final image prompt in English. No markdown. No explanations.',
+        'Make the prompt complete enough for image generation without seeing the original chat.',
+        'When a character card contains role, occupation, hair, face, outfit, personality, or relationship details, keep those visual identity details unless they are explicit.',
+        'For character portraits, prioritize the currently active character card over the latest speaker if they differ.',
+        'The prompt must be suitable for a public image model: describe only fully dressed fictional adults, non-explicit body language, environment, lighting, composition, and visual style.',
+        'If the source contains explicit, erotic, violent, incest, or other restricted actions, convert them into neutral visual mood such as dramatic tension, emotional intensity, awkward silence, conflict, concern, longing, or suspense.',
+        'Keep concrete identity and appearance details. Remove explicit acts, anatomy, sexual status words, dice/check mechanics, JSON patches, and meta instructions.',
+        'Use positive visual wording only. Do not include negative safety instructions.',
+        '',
+        getPromptSourceText(),
+    ].join('\n');
+}
+
+async function tryBuildPromptWithAgnesTextAI(mode) {
+    if (!settings.apiKey) {
+        return '';
+    }
+
+    const response = await fetch(AGNES_TEXT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${settings.apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: AGNES_TEXT_MODEL,
+            temperature: 0.4,
+            max_tokens: AI_PROMPT_RESPONSE_LENGTH,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You convert roleplay context into safe, concrete, English image prompts. Preserve visual identity and story relevance. Output only the image prompt.',
+                },
+                {
+                    role: 'user',
+                    content: buildImagePromptInstruction(mode),
+                },
+            ],
+        }),
+    });
+
+    const rawText = await response.text();
+    let payload = {};
+    try {
+        payload = rawText ? JSON.parse(rawText) : {};
+    } catch {
+        payload = { raw: rawText };
+    }
+
+    if (!response.ok) {
+        throw new Error(payload?.error?.message || payload?.message || rawText || response.statusText);
+    }
+
+    return finalCleanImagePrompt(payload?.choices?.[0]?.message?.content || '');
+}
+
+async function buildPromptWithAgnesTextAI(mode) {
+    setStatus('正在调用 Agnes-2.0-Flash 生成完整图片提示词...');
+    try {
+        const agnesPrompt = await withTimeout(tryBuildPromptWithAgnesTextAI(mode), TEXT_AI_TIMEOUT_MS, 'Agnes text prompt generation');
+        if (agnesPrompt) return agnesPrompt;
+    } catch (error) {
+        console.warn(`[${EXTENSION_TITLE}] Agnes text prompt AI failed, using fallback`, error);
+    }
+
+    setStatus('Agnes 文本 AI 失败，正在使用本地降级方式...');
+    return buildPrompt(mode);
+}
+
 function extractImageUrl(response) {
     if (Array.isArray(response?.data) && response.data.length > 0) {
         return response.data[0]?.url || response.data[0]?.b64_json || '';
@@ -421,7 +560,7 @@ async function generateImage(mode) {
     try {
         setPanelOpen(true);
         setStatus(mode === 'character' ? '正在生成角色图...' : '正在生成场景图...');
-        const prompt = buildPrompt(mode);
+        const prompt = await buildPromptWithAgnesTextAI(mode);
         const promptBox = document.querySelector('#agnes_image_prompt');
         if (promptBox) promptBox.value = prompt;
 
