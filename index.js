@@ -82,6 +82,8 @@ function getFieldValue(id) {
 function removeUnsafeBypassText(value) {
     return String(value ?? '')
         .replace(/(?:jailbreak|破限|越狱|绕过|无视规则|解除限制|bypass|ignore policy|ignore safety)/gi, ' ')
+        .replace(/[A-H]\s*罩杯/gi, ' ')
+        .replace(/\b[A-H]\s*cup\b/gi, ' ')
         .replace(/(?:阴茎|龟头|阴道|阴唇|乳头|裸体|裸露|赤裸|性交|交合|做爱|口交|肛交|高潮|射精|精液|跳蛋|性器|色情|性爱|性斗|骰值|体质|经验|罩杯|胸部|乳房|睡裙|贴身)/g, ' ')
         .replace(/\b(?:penis|vagina|vulva|nipple|nude|naked|sex|sexual|intercourse|oral sex|anal sex|orgasm|semen|porn)\b/gi, ' ');
 }
