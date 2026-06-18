@@ -1,0 +1,13 @@
+{
+  "display_name": "Agnes Image",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "package_sender",
+  "version": "0.1.0",
+  "homePage": "https://agnes-ai.com/doc#3764a189-eee5-801e-8031-ce764321a598",
+  "auto_update": false,
+  "minimum_client_version": "1.12.13"
+}
