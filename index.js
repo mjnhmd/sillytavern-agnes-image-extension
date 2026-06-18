@@ -450,7 +450,8 @@ function buildPrompt(mode) {
 function finalCleanImagePrompt(value) {
     return sanitizeForImagePrompt(value)
         .replace(/(?:must not|do not|avoid|forbidden|restricted|policy|safety|安全|禁止|不能|不要)/gi, ' ')
-        .replace(/\b(?:bare back|bare waist|waistline|pushed up|expose(?:d|s)?|sweat(?:y)?|intimate|seductive|sensual|surrender|bed|bedroom)\b/gi, ' ')
+        .replace(/\bwearing ([^,.]*t-shirt)[^,.]*(?:midriff|back|waist)[^,.]*/gi, 'wearing a loose grey oversized t-shirt with a modest natural fit')
+        .replace(/\b(?:bare back|bare waist|midriff|waistline|pushed up|expose(?:d|s)?|revealing|sweat(?:y)?|intimate|seductive|sensual|surrender(?:ing)?|half-lidded|flushed|humid|bed|bedroom)\b/gi, ' ')
         .replace(/露出|裸背|腰线|掀起|汗水|亲密|诱惑|性感|臣服|床/g, ' ')
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
