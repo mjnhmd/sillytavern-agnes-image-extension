@@ -456,6 +456,20 @@ function finalCleanImagePrompt(value) {
         .slice(0, 1200);
 }
 
+function applyReferenceCompositionGuidance(prompt, referenceImages) {
+    if (!referenceImages.length) return prompt;
+
+    const cleanedPrompt = String(prompt || '')
+        .replace(/\bstanding(?: alone)?(?: [^,]{0,100})?,?/gi, 'leaning toward the camera in a tight close-up upper-body crop,')
+        .replace(/\bfull[-\s]?body\b/gi, 'tight close-up upper-body')
+        .replace(/\bwide shot\b/gi, 'tight close-up portrait');
+
+    return finalCleanImagePrompt([
+        'Use the first reference image as a strict visual reference: tight close-up upper-body portrait, high-angle camera, face and red hair dominate the frame, burgundy robe or satin evening dress, warm dark interior, same crop and composition.',
+        cleanedPrompt,
+    ].join(' '));
+}
+
 function withTimeout(promise, timeoutMs, label) {
     return Promise.race([
         promise,
@@ -633,7 +647,7 @@ async function generateImage(mode) {
         setPanelOpen(true);
         setStatus(mode === 'character' ? '正在生成角色图...' : '正在生成场景图...');
         const referenceImages = getReferenceImages();
-        const prompt = await buildPromptWithAgnesTextAI(mode);
+        const prompt = applyReferenceCompositionGuidance(await buildPromptWithAgnesTextAI(mode), referenceImages);
         const promptBox = document.querySelector('#agnes_image_prompt');
         if (promptBox) promptBox.value = prompt;
 
