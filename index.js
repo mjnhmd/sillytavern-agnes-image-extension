@@ -78,7 +78,7 @@ function getFieldValue(id) {
 function removeUnsafeBypassText(value) {
     return String(value ?? '')
         .replace(/(?:jailbreak|破限|越狱|绕过|无视规则|解除限制|bypass|ignore policy|ignore safety)/gi, ' ')
-        .replace(/(?:阴茎|龟头|阴道|阴唇|乳头|裸体|裸露|赤裸|性交|交合|做爱|口交|肛交|高潮|射精|精液|跳蛋|性器|色情|性爱|性斗|性|骰值|体质|经验)/g, ' ')
+        .replace(/(?:阴茎|龟头|阴道|阴唇|乳头|裸体|裸露|赤裸|性交|交合|做爱|口交|肛交|高潮|射精|精液|跳蛋|性器|色情|性爱|性斗|骰值|体质|经验|罩杯|胸部|乳房|睡裙|贴身)/g, ' ')
         .replace(/\b(?:penis|vagina|vulva|nipple|nude|naked|sex|sexual|intercourse|oral sex|anal sex|orgasm|semen|porn)\b/gi, ' ');
 }
 
@@ -122,6 +122,135 @@ function getActiveCharacterText() {
         `Scenario: ${character.scenario || ''}`,
         `Creator notes: ${character.creator_notes || ''}`,
     ].filter(Boolean).join('\n');
+}
+
+function normalizePersonName(value) {
+    const name = sanitizeForImagePrompt(value)
+        .split(/[|｜:：,，/\\\-—\s]/)[0]
+        .replace(/[「」『』"'“”]/g, '')
+        .trim();
+
+    if (!name || name.length > 24) return '';
+    if (/^(assistant|system|sillytavern|user|narity)$/i.test(name)) return '';
+    return name;
+}
+
+function getCandidateNames(rawText) {
+    const context = getContext();
+    const names = new Set();
+    const activeCharacter = Number.isInteger(context.characterId)
+        ? context.characters?.[context.characterId]
+        : null;
+
+    [
+        activeCharacter?.name,
+        context.name2,
+        ...(Array.isArray(context.chat) ? context.chat.slice(-CHAT_MESSAGE_COUNT).map(message => message.name) : []),
+    ].forEach((name) => {
+        const normalized = normalizePersonName(name);
+        if (normalized) names.add(normalized);
+    });
+
+    const roleMatches = String(rawText || '').matchAll(/(?:在场角色|角色|人物|登场人物)[:：]\s*([^<\n。]{1,120})/gi);
+    for (const match of roleMatches) {
+        match[1].split(/[、,，;；\s-]+/).forEach((part) => {
+            const normalized = normalizePersonName(part);
+            if (normalized) names.add(normalized);
+        });
+    }
+
+    return [...names].slice(0, 4);
+}
+
+function findCharacterByName(name) {
+    const characters = Array.isArray(getContext().characters) ? getContext().characters : [];
+    return characters.find(character => character?.name === name)
+        || characters.find(character => String(character?.name || '').includes(name) || name.includes(String(character?.name || '')));
+}
+
+function translateVisualTerms(value) {
+    return String(value || '')
+        .replace(/女/g, 'female')
+        .replace(/男/g, 'male')
+        .replace(/(\d+)\s*岁/g, '$1 years old')
+        .replace(/国际时尚杂志《?Vogue》?A国版主编/g, 'fashion magazine editor in chief')
+        .replace(/时尚杂志/g, 'fashion magazine')
+        .replace(/主编/g, 'editor in chief')
+        .replace(/红色大波浪长卷发/g, 'red wavy long hair')
+        .replace(/大波浪长卷发/g, 'wavy long hair')
+        .replace(/长卷发/g, 'long curly hair')
+        .replace(/正红色唇膏/g, 'red lipstick')
+        .replace(/红色唇膏/g, 'red lipstick')
+        .replace(/西装套装/g, 'business suit')
+        .replace(/真丝衬衫/g, 'silk blouse')
+        .replace(/高跟鞋/g, 'high heels')
+        .replace(/连衣裙/g, 'dress')
+        .replace(/白色帆布鞋/g, 'white canvas shoes')
+        .replace(/浅薄荷色碎花/g, 'light mint floral')
+        .replace(/黑色/g, 'black')
+        .replace(/酒红色/g, 'burgundy')
+        .replace(/红色/g, 'red')
+        .replace(/白色/g, 'white')
+        .replace(/温柔/g, 'gentle')
+        .replace(/强势/g, 'confident')
+        .replace(/成熟/g, 'mature')
+        .replace(/优雅/g, 'elegant');
+}
+
+function extractCharacterVisualLines(character) {
+    if (!character) return [];
+
+    const text = [
+        character.name ? `name: ${character.name}` : '',
+        character.description || character.desc || '',
+        character.personality || '',
+        character.scenario || '',
+        character.creator_notes || '',
+    ].filter(Boolean).join('\n');
+
+    const visualKeywords = /(姓名|年龄|性别|身份|职业|外貌|体型|身高|发色|发型|面部|眼睛|穿着|服装|衣服|职场|居家|personality|appearance|hair|eyes|outfit|clothing|role|age|gender)/i;
+
+    return text
+        .split(/\r?\n/)
+        .map(line => sanitizeForImagePrompt(line).replace(/^\s*[-*•]+\s*/, '').trim())
+        .filter(line => line && visualKeywords.test(line))
+        .map(line => line
+            .replace(/姓名/g, 'name')
+            .replace(/年龄/g, 'age')
+            .replace(/性别/g, 'gender')
+            .replace(/身份|职业/g, 'role')
+            .replace(/外貌特征|外貌/g, 'appearance')
+            .replace(/体型/g, 'body type')
+            .replace(/身高/g, 'height')
+            .replace(/发色|发型/g, 'hair')
+            .replace(/面部/g, 'face')
+            .replace(/穿着|服装|衣服/g, 'outfit')
+            .replace(/职场/g, 'work outfit')
+            .replace(/居家/g, 'casual home outfit'))
+        .map(translateVisualTerms)
+        .map(line => line.slice(0, 180))
+        .slice(0, 10);
+}
+
+function getCharacterVisualBrief(rawText) {
+    const names = getCandidateNames(rawText);
+    const sections = [];
+
+    for (const name of names) {
+        const character = findCharacterByName(name);
+        const visualLines = extractCharacterVisualLines(character);
+        if (visualLines.length > 0) {
+            sections.push(`Character ${name}: ${visualLines.join('; ')}`);
+        } else {
+            sections.push(`Character ${name}: fictional adult character, expressive face, detailed outfit, story-matching temperament`);
+        }
+    }
+
+    if (sections.length === 0) {
+        return 'fictional adult character, expressive face, detailed outfit, calm dramatic temperament';
+    }
+
+    return normalizeWhitespace(sections.join('\n')).slice(0, 1200);
 }
 
 function getPresetVisualHints() {
@@ -179,37 +308,42 @@ function makePublicSafeBrief(value) {
     return normalizeWhitespace(text).slice(0, 800);
 }
 
-function buildScenePrompt(visualBrief, presetHints) {
+function buildScenePrompt(visualBrief, characterBrief, presetHints) {
     return [
         'Cinematic realistic illustration.',
         visualBrief || 'A quiet atmospheric story scene.',
-        'Fully dressed people in natural relaxed poses, expressive faces, emotional atmosphere, coherent lighting, clear composition, high detail.',
+        characterBrief ? `Featuring: ${characterBrief}` : 'Fictional adult characters with expressive faces and detailed outfits.',
+        'Fully dressed people in natural relaxed poses, emotional atmosphere, coherent lighting, clear composition, high detail.',
         presetHints || 'best quality, masterpiece.',
     ].filter(Boolean).join('\n');
 }
 
-function buildCharacterPrompt(visualBrief, presetHints) {
+function buildCharacterPrompt(characterBrief, sceneBrief, presetHints) {
     return [
         'High quality character concept art portrait.',
-        visualBrief || 'A fictional character with a calm dramatic mood.',
+        characterBrief || 'A fictional adult character with a calm dramatic mood.',
+        sceneBrief ? `Background mood: ${sceneBrief}` : '',
         'Fully dressed character, expressive eyes, clear face, detailed outfit, natural posture, simple story-matching background, coherent lighting.',
         presetHints || 'best quality, masterpiece.',
     ].filter(Boolean).join('\n');
 }
 
 function buildPrompt(mode) {
-    const chatText = sanitizeForImagePrompt(getRecentChatText()).slice(0, 6000);
-    const characterText = sanitizeForImagePrompt(getActiveCharacterText()).slice(0, 3000);
+    const rawChatText = getRecentChatText();
+    const rawCharacterText = getActiveCharacterText();
+    const chatText = sanitizeForImagePrompt(rawChatText).slice(0, 6000);
+    const characterText = sanitizeForImagePrompt(rawCharacterText).slice(0, 3000);
     const presetHints = getPresetVisualHints();
     const visualBrief = makePublicSafeBrief(extractSceneBrief(chatText, characterText));
+    const characterBrief = makePublicSafeBrief(getCharacterVisualBrief(`${rawChatText}\n${rawCharacterText}`));
 
-    if (!visualBrief && !presetHints) {
+    if (!visualBrief && !characterBrief && !presetHints) {
         throw new Error('当前没有可用于生成的聊天、角色或预设内容');
     }
 
     return mode === 'character'
-        ? buildCharacterPrompt(visualBrief, presetHints)
-        : buildScenePrompt(visualBrief, presetHints);
+        ? buildCharacterPrompt(characterBrief, visualBrief, presetHints)
+        : buildScenePrompt(visualBrief, characterBrief, presetHints);
 }
 
 function extractImageUrl(response) {
